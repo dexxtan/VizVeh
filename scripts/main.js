@@ -4,8 +4,8 @@ var svg, path, projection, zoom,
 		mapHeight = 600,
 		size = (mapHeight / 2) - 10,
 		scale = 450000,
-		centerX = -26.45,
-		centerY = 37.78;
+		centerX = 122.4383,
+		centerY = 37.7800;
 
 svg = d3.select("body").append("svg")
 			.attr("width", mapWidth)
@@ -17,8 +17,9 @@ zoom = d3.behavior.zoom()
 svg.call(zoom);
 
 projection = d3.geo.albers()
-		.center([centerX, centerY])
     .scale(scale)
+    .rotate([centerX, 0]) 
+    .center([0, centerY]) 
     .translate(zoom.translate());
 
 path = d3.geo.path()
@@ -66,12 +67,12 @@ interval = setInterval(function() {
 	if (neighborhoods && streets && arteries && freeways) {
 	  feature.neighborhoods = svg.selectAll("path")
 	      .data(neighborhoods)
-	    .enter().append("svg:path")
+	    .enter().append("path")
 	      .attr("class", "neighborhood")
 	      .attr("d", path);
 	  feature.roads = svg.selectAll("path")
 	      .data(roads)
-	    .enter().append("svg:path")
+	    .enter().append("path")
 	      .attr("class", "road")
 	      .attr("d", path);
 		clearInterval(interval);

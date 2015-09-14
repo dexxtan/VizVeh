@@ -12,5 +12,6 @@ svg {
 }
 
 .road {
-	fill: rgb(0,0,0);
+    stroke: rgb(0,0,0);
+    fill: none;
 }
