@@ -1,0 +1,16 @@
+body {
+	background-color: rgb(128,128,128)
+}
+
+svg {
+	display: block;
+	margin: auto;
+}
+
+.neighborhood {
+	fill: rgb(200,200,200);
+}
+
+.road {
+	fill: rgb(0,0,0);
+}
