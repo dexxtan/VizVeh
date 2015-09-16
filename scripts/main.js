@@ -32,13 +32,17 @@ function rescale() {
 			.translate(zoom.translate());
 
 	// refresh paths
-	feature.roads.data(roads)
+	if (feature.roads) feature.roads.data(roads)
 			.attr("d", path);
-	feature.neighborhoods.data(neighborhoods)
+	if (feature.neighborhoods) feature.neighborhoods.data(neighborhoods)
+			.attr("d", path);
+	if (feature.vehicles) feature.vehicles.data(vehicleFeatures)
 			.attr("d", path);
 }
 
-var neighborhoods, streets, arteries, freeways, interval,
+
+
+var neighborhoods, streets, arteries, freeways, jsonDataPoller,
 		roads = [];
 
 // async calls to get json data
@@ -63,18 +67,110 @@ d3.json("data/sfmaps/freeways.json", function(collection) {
 
 // simple use of interval and "flags", neighborhoods, streets, arteries, freeways
 // to append paths to svg only when all async json calls are done, can be replaced more elegantly with async.js
-interval = setInterval(function() {
+jsonDataPoller = setInterval(function() {
 	if (neighborhoods && streets && arteries && freeways) {
-	  feature.neighborhoods = svg.selectAll("path")
+		clearInterval(jsonDataPoller);
+
+	  feature.neighborhoods = svg.append("g")
+	  		.attr("class", "neighborhoods")
+	  		.selectAll("path")
 	      .data(neighborhoods)
 	    .enter().append("path")
 	      .attr("class", "neighborhood")
 	      .attr("d", path);
-	  feature.roads = svg.selectAll("path")
+	  feature.roads = svg.append("g")
+	  		.attr("class", "roads")
+	  		.selectAll("path")
 	      .data(roads)
 	    .enter().append("path")
 	      .attr("class", "road")
 	      .attr("d", path);
-		clearInterval(interval);
 	}
 }, 50);
+
+
+var routeListFlag,
+		routeListPoller,
+		routes = [],
+		vehicles = [],
+		vehicleFeatures = [],
+		vehicleLocationUpdater;
+
+d3.xml("http://webservices.nextbus.com/service/publicXMLFeed?command=routeList&a=sf-muni", function(xml) {
+	var routeList = xml.getElementsByTagName("route");
+	for (var i = 0; i < routeList.length; i++) {
+		// store route tags and title to get vehicle locations
+		routes.push(objectify(routeList[i]));
+	}
+	routeListFlag = true;
+});
+
+routeListPoller = setInterval(function() {
+	if (routeListFlag) {
+		clearInterval(routeListPoller);
+		
+		updateVehicleLocations();
+		//set interval to regularly update vehicle locations every 15 seconds
+		vehicleLocationUpdater = setInterval(function() {
+			updateVehicleLocations();
+		}, 15000);
+	}
+}, 50);
+
+function updateVehicleLocations() {
+	var vehicleListPoller,
+			vehicleQueryCounter = 0;
+	// get current Pacific Time in milliseconds
+	var offset = -7;
+	var epochTime = new Date( new Date().getTime() + offset * 3600 * 1000).getTime();
+
+	// reset lists
+	vehicles = [];
+	vehicleFeatures = [];
+
+	for (var i = 0; i < routes.length; i++) (function(i) {
+		d3.xml("http://webservices.nextbus.com/service/publicXMLFeed?command=vehicleLocations&a=sf-muni&r="+routes[i].tag+"&t="+epochTime, function(xml) {
+			var currentVehicle, geojson,
+					vehicleList = xml.getElementsByTagName("vehicle");
+			for (var j = 0; j < vehicleList.length; j++) {
+				currentVehicle = objectify(vehicleList[j]);
+				vehicles.push(currentVehicle);
+				geojson = {
+          "type": "Feature", 
+          "geometry": {
+            "type": "Point",
+            "coordinates": [currentVehicle.lon, currentVehicle.lat]
+          }
+				};
+				vehicleFeatures.push(geojson);
+			}
+			vehicleQueryCounter++;
+		});
+	})(i);
+
+	vehicleListPoller = setInterval(function() {
+		if (vehicleQueryCounter == routes.length) {
+			clearInterval(vehicleListPoller);
+			var vehicleG;
+
+			svg.select("g.vehicles").remove();
+			vehicleG = svg.append("g")
+					.attr("class", "vehicles");
+
+			feature.vehicles = vehicleG.selectAll("path")
+		      .data(vehicleFeatures)
+		    .enter().append("path")
+		      .attr("class", "vehicle")
+		      .attr("d", path);
+		  console.log("Vehicle Locations Updated");
+		}
+	}, 50);
+}
+
+function objectify(element) {
+	var object = {}
+	for (var i = 0; i < element.attributes.length; i++) {
+		object[element.attributes[i].name] = element.attributes[i].value;
+	}
+	return object;
+}
