@@ -1,4 +1,4 @@
-var svg, path, projection, zoom,
+var svg, path, projection, zoom, selectControl,
 		feature = {},
 		mapWidth = 960,
 		mapHeight = 600,
@@ -38,6 +38,35 @@ function rescale() {
 			.attr("d", path);
 	if (feature.vehicles) feature.vehicles.data(vehicleFeatures)
 			.attr("d", path);
+}
+
+selectControl = d3.select("#routeSelect")
+		.on("change", filterByRoute)
+		.node();
+
+// filter function to display only vehicles on selected routes
+function filterByRoute() {
+	var currentOption,
+			selectedRoutes = {};
+
+	// check selected options
+	for (var i = 0; i < selectControl.options.length; i++) {
+		currentOption = selectControl.options[i];
+		if (currentOption.selected) {
+			selectedRoutes[currentOption.text] = true;
+		}
+	}
+
+	// display or hide vehicles with invis class
+	if (feature.vehicles && selectControl.options.length > 0) {
+		feature.vehicles.each(function(vehicle) {
+			if ( selectedRoutes[vehicle.properties.routeTag] ) {
+				d3.select(this).attr("class", "vehicle");
+			} else {
+				d3.select(this).attr("class", "vehicle invis");
+			}
+		});
+	}
 }
 
 
@@ -89,18 +118,26 @@ jsonDataPoller = setInterval(function() {
 }, 50);
 
 
+
 var routeListFlag,
 		routeListPoller,
 		routes = [],
-		vehicles = [],
 		vehicleFeatures = [],
 		vehicleLocationUpdater;
 
+// async call to get route data
 d3.xml("http://webservices.nextbus.com/service/publicXMLFeed?command=routeList&a=sf-muni", function(xml) {
-	var routeList = xml.getElementsByTagName("route");
+	var option,
+			select = document.getElementById("routeSelect"),
+			routeList = xml.getElementsByTagName("route");
 	for (var i = 0; i < routeList.length; i++) {
 		// store route tags and title to get vehicle locations
 		routes.push(objectify(routeList[i]));
+
+		// populate select options
+		option = document.createElement("option");
+		option.text = routeList[i].getAttribute("tag");
+		select.add(option);
 	}
 	routeListFlag = true;
 });
@@ -110,7 +147,7 @@ routeListPoller = setInterval(function() {
 		clearInterval(routeListPoller);
 		
 		updateVehicleLocations();
-		//set interval to regularly update vehicle locations every 15 seconds
+		// set interval to regularly update vehicle locations every 15 seconds
 		vehicleLocationUpdater = setInterval(function() {
 			updateVehicleLocations();
 		}, 15000);
@@ -120,29 +157,31 @@ routeListPoller = setInterval(function() {
 function updateVehicleLocations() {
 	var vehicleListPoller,
 			vehicleQueryCounter = 0;
+
 	// get current Pacific Time in milliseconds
 	var offset = -7;
 	var epochTime = new Date( new Date().getTime() + offset * 3600 * 1000).getTime();
 
-	// reset lists
-	vehicles = [];
+	// reset Vehicle Features Array
 	vehicleFeatures = [];
 
 	for (var i = 0; i < routes.length; i++) (function(i) {
 		d3.xml("http://webservices.nextbus.com/service/publicXMLFeed?command=vehicleLocations&a=sf-muni&r="+routes[i].tag+"&t="+epochTime, function(xml) {
-			var currentVehicle, geojson,
+			var currentVehicle, feature,
 					vehicleList = xml.getElementsByTagName("vehicle");
 			for (var j = 0; j < vehicleList.length; j++) {
 				currentVehicle = objectify(vehicleList[j]);
-				vehicles.push(currentVehicle);
-				geojson = {
+
+				// create feature to store in features array
+				feature = {
           "type": "Feature", 
           "geometry": {
             "type": "Point",
             "coordinates": [currentVehicle.lon, currentVehicle.lat]
-          }
+          },
+          "properties": currentVehicle
 				};
-				vehicleFeatures.push(geojson);
+				vehicleFeatures.push(feature);
 			}
 			vehicleQueryCounter++;
 		});
@@ -151,22 +190,25 @@ function updateVehicleLocations() {
 	vehicleListPoller = setInterval(function() {
 		if (vehicleQueryCounter == routes.length) {
 			clearInterval(vehicleListPoller);
-			var vehicleG;
 
+			// clear vehicles g simply
 			svg.select("g.vehicles").remove();
-			vehicleG = svg.append("g")
-					.attr("class", "vehicles");
 
-			feature.vehicles = vehicleG.selectAll("path")
+			feature.vehicles = svg.append("g")
+					.attr("class", "vehicles")
+				.selectAll("path")
 		      .data(vehicleFeatures)
 		    .enter().append("path")
 		      .attr("class", "vehicle")
 		      .attr("d", path);
+		  filterByRoute();
+
 		  console.log("Vehicle Locations Updated");
 		}
 	}, 50);
 }
 
+// helper function to convert xml document elements into objects
 function objectify(element) {
 	var object = {}
 	for (var i = 0; i < element.attributes.length; i++) {

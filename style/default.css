@@ -7,6 +7,10 @@ svg {
 	margin: auto;
 }
 
+#routeSelect { 
+	float: left;
+}
+
 .neighborhood {
 	stroke: rgb(255,255,255);
 	fill: rgb(200,200,200);
@@ -21,4 +25,8 @@ svg {
 	stroke: rgb(128,128,128);
 	fill: rgb(255,31,31);
 	opacity: 0.4;
+}
+
+.invis {
+	display: none;
 }
